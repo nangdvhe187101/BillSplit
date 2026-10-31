@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="markGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+  <!-- Quyển sổ nợ cách điệu -->
+  <rect x="10" y="8" width="44" height="48" rx="10" fill="url(#markGradient)"/>
+  <rect x="10" y="8" width="44" height="48" rx="10" fill="white" fill-opacity="0.04"/>
+  <!-- Gáy sổ -->
+  <rect x="10" y="8" width="8" height="48" rx="6" fill="white" fill-opacity="0.22"/>
+  <!-- Dòng ghi nợ -->
+  <rect x="25" y="20" width="21" height="4" rx="2" fill="white" fill-opacity="0.85"/>
+  <rect x="25" y="29" width="15" height="4" rx="2" fill="white" fill-opacity="0.55"/>
+  <!-- Dấu tích xác nhận đã đối soát -->
+  <circle cx="34" cy="43" r="11" fill="white"/>
+  <path d="M29 43.2 L33 47 L40 38.5" stroke="#0284C7" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

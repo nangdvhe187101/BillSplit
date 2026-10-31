@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/app_logo.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../data/models/dashboard_stats_model.dart';
 import '../../data/repositories/statistics_repository.dart';
@@ -73,10 +74,8 @@ class _HomePageState extends State<HomePage> {
     final authState = context.watch<AuthBloc>().state;
     final user = authState is Authenticated ? authState.user : null;
 
-    final netBalance = _stats?.netBalance ?? 0.0;
     final totalReceivable = _stats?.totalReceivable ?? 0.0;
     final totalPayable = _stats?.totalPayable ?? 0.0;
-    final isNetPositive = netBalance >= 0;
 
     final isGuest = user == null;
 
@@ -85,58 +84,75 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: GestureDetector(
-          onTap: () {
-            if (isGuest) {
-              context.push('/login');
-            } else {
-              _showEditProfileDialog();
-            }
-          },
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: AppColors.primarySoft,
-                backgroundImage: user?.avatarUrl != null ? NetworkImage(user!.avatarUrl!) : null,
-                child: user?.avatarUrl == null
-                    ? Icon(isGuest ? Icons.person_outline_rounded : Icons.person, color: AppColors.primary)
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        isGuest ? 'Khách trải nghiệm' : (user?.fullName ?? 'Người dùng'),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
+        titleSpacing: 20,
+        automaticallyImplyLeading: false,
+        title: Row(
+          children: [
+            const AppLogo(size: 36),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  if (isGuest) {
+                    context.push('/login');
+                  } else {
+                    _showEditProfileDialog();
+                  }
+                },
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppColors.primarySoft,
+                      backgroundImage: user?.avatarUrl != null ? NetworkImage(user!.avatarUrl!) : null,
+                      child: user?.avatarUrl == null
+                          ? Icon(isGuest ? Icons.person_outline_rounded : Icons.person, color: AppColors.primary, size: 18)
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  isGuest ? 'Khách trải nghiệm' : (user?.fullName ?? 'Người dùng'),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                isGuest ? Icons.login_rounded : Icons.edit_outlined,
+                                size: 13,
+                                color: AppColors.primary,
+                              ),
+                            ],
+                          ),
+                          Text(
+                            isGuest
+                                ? 'Chạm để đăng nhập / đăng ký'
+                                : (user != null && user.bankBin.isNotEmpty
+                                    ? 'BIN: ${user.bankBin} • ${user.bankAccountNo}'
+                                    : 'Bấm để sửa tài khoản VietQR'),
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        isGuest ? Icons.login_rounded : Icons.edit_outlined,
-                        size: 14,
-                        color: AppColors.primary,
-                      ),
-                    ],
-                  ),
-                  Text(
-                    isGuest
-                        ? 'Chạm để đăng nhập / đăng ký'
-                        : (user != null && user.bankBin.isNotEmpty
-                            ? 'BIN: ${user.bankBin} • ${user.bankAccountNo}'
-                            : 'Bấm để sửa tài khoản VietQR'),
-                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
         actions: [
           if (isGuest)
@@ -184,12 +200,12 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. Thẻ Tổng Quan Tài Chính (KPI Overview Card)
+                // 1. Hero Card: Tổng quan công nợ hai chiều (sổ nợ trung gian, không giữ tiền)
                 Container(
                   padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryDark],
+                      colors: [AppColors.primary, AppColors.primaryDark, AppColors.primaryDarker],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -205,92 +221,93 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Số dư ròng tổng thể',
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _isLoading
-                            ? '...'
-                            : '${isNetPositive ? '+' : ''}${_currencyFormat.format(netBalance)} đ',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
                       Row(
                         children: [
-                          // Cần thu về
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.arrow_downward_rounded, color: Colors.white, size: 14),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Cần thu về',
-                                        style: TextStyle(color: Colors.white70, fontSize: 11),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _isLoading ? '...' : '${_currencyFormat.format(totalReceivable)} đ',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              'SỔ NỢ THÔNG MINH',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.6,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          // Cần trả
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Mọi người đang nợ bạn
                           Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 14),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Cần trả',
-                                        style: TextStyle(color: Colors.white70, fontSize: 11),
-                                      ),
-                                    ],
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Mọi người đang nợ bạn',
+                                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _isLoading ? '...' : '${_currencyFormat.format(totalReceivable)} đ',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.3,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _isLoading ? '...' : '${_currencyFormat.format(totalPayable)} đ',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.22)),
+                          const SizedBox(width: 16),
+                          // Bạn đang nợ người khác
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Bạn đang nợ người khác',
+                                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _isLoading ? '...' : '${_currencyFormat.format(totalPayable)} đ',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.3,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      // Trust badges: nhắc rõ app chỉ là trung gian đối soát, không giữ tiền
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTrustBadge(
+                              icon: AppIcons.badgeShieldCheck,
+                              label: 'Không giữ tiền của bạn',
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildTrustBadge(
+                              icon: AppIcons.statusSettled,
+                              label: 'Đối soát qua VietQR',
                             ),
                           ),
                         ],
@@ -300,12 +317,12 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 24),
 
-                // 2. Tiện Ích Thao Tác Nhanh (Quick Actions)
+                // 2. Tiện Ích Thao Tác Nhanh (Quick Actions) — bộ icon SVG riêng của ứng dụng
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildQuickAction(
-                      icon: Icons.qr_code_rounded,
+                      iconAsset: AppIcons.actionQrReceive,
                       label: 'QR nhận tiền',
                       onTap: () {
                         final authState = context.read<AuthBloc>().state;
@@ -323,17 +340,17 @@ class _HomePageState extends State<HomePage> {
                       },
                     ),
                     _buildQuickAction(
-                      icon: Icons.add_circle_outline_rounded,
+                      iconAsset: AppIcons.actionNewBill,
                       label: 'Tạo bill mới',
                       onTap: () => context.push('/split'),
                     ),
                     _buildQuickAction(
-                      icon: Icons.group_outlined,
+                      iconAsset: AppIcons.actionGroup,
                       label: 'Tạo nhóm',
                       onTap: () => context.push('/groups'),
                     ),
                     _buildQuickAction(
-                      icon: Icons.people_alt_outlined,
+                      iconAsset: AppIcons.actionFriends,
                       label: 'Bạn bè',
                       onTap: () => context.push('/friends'),
                     ),
@@ -655,9 +672,12 @@ class _HomePageState extends State<HomePage> {
                       color: isPaid ? AppColors.success.withValues(alpha: 0.15) : AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
-                      isPaid ? Icons.check_circle_outline_rounded : Icons.pending_outlined,
-                      color: isPaid ? AppColors.success : AppColors.primary,
+                    child: Center(
+                      child: AppIcon(
+                        assetPath: isPaid ? AppIcons.statusSettled : AppIcons.statusPending,
+                        size: 20,
+                        color: isPaid ? AppColors.success : AppColors.primary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -716,8 +736,33 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Nhãn uy tín hiển thị trong hero card, dùng icon SVG riêng của ứng dụng
+  /// để nhắc minh bạch vai trò trung gian đối soát (không giữ tiền người dùng).
+  Widget _buildTrustBadge({required String icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          AppIcon(assetPath: icon, size: 15, color: Colors.white),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuickAction({
-    required IconData icon,
+    required String iconAsset,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -741,7 +786,9 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-            child: Icon(icon, color: AppColors.primary, size: 26),
+            child: Center(
+              child: AppIcon(assetPath: iconAsset, size: 26, color: AppColors.primary),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
