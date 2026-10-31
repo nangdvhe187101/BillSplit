@@ -138,12 +138,23 @@ public class AuthService : IAuthService
             }
         }
 
+        // Chặn spam: mỗi email chỉ được gửi 1 mã OTP mới sau mỗi 60 giây,
+        // tránh bị lợi dụng gửi hàng loạt làm cạn hạn ngạch Gmail hoặc làm phiền người bị target.
+        var cooldownKey = $"otp_cooldown_{purpose}_{email}";
+        if (_memoryCache.TryGetValue(cooldownKey, out _))
+        {
+            return (false, "Vui lòng đợi ít nhất 60 giây trước khi yêu cầu mã OTP mới.");
+        }
+
         // Tạo mã OTP 6 chữ số ngẫu nhiên
         var otpCode = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
         var cacheKey = $"otp_{purpose}_{email}";
+        var attemptsKey = $"otp_attempts_{purpose}_{email}";
 
-        // Lưu vào IMemoryCache trong 10 phút
+        // Lưu vào IMemoryCache trong 10 phút, đặt lại bộ đếm số lần nhập sai cho mã mới này
         _memoryCache.Set(cacheKey, otpCode, TimeSpan.FromMinutes(10));
+        _memoryCache.Remove(attemptsKey);
+        _memoryCache.Set(cooldownKey, true, TimeSpan.FromSeconds(60));
 
         var title = purpose == "register" ? "Xác nhận đăng ký Sổ Nợ" : "Mã xác thực đổi mật khẩu Sổ Nợ";
         var body = $@"
@@ -165,11 +176,14 @@ public class AuthService : IAuthService
         return (true, "Mã xác thực OTP đã được gửi đến email của bạn.");
     }
 
+    private const int MaxOtpAttempts = 5;
+
     public Task<(bool Success, string Message)> VerifyOtpAsync(VerifyOtpRequestDto request)
     {
         var email = request.Email.Trim().ToLower();
         var purpose = request.Purpose.Trim().ToLower();
         var cacheKey = $"otp_{purpose}_{email}";
+        var attemptsKey = $"otp_attempts_{purpose}_{email}";
 
         if (!_memoryCache.TryGetValue<string>(cacheKey, out var cachedOtp))
         {
@@ -178,9 +192,27 @@ public class AuthService : IAuthService
 
         if (cachedOtp != request.OtpCode.Trim())
         {
+            // Chặn dò vét cạn: sau 5 lần nhập sai, hủy luôn mã OTP hiện tại để buộc người dùng
+            // yêu cầu mã mới thay vì tiếp tục thử trong 10 phút còn lại.
+            var attempts = _memoryCache.GetOrCreate(attemptsKey, entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                return 0;
+            });
+            attempts++;
+            _memoryCache.Set(attemptsKey, attempts, TimeSpan.FromMinutes(10));
+
+            if (attempts >= MaxOtpAttempts)
+            {
+                _memoryCache.Remove(cacheKey);
+                _memoryCache.Remove(attemptsKey);
+                return Task.FromResult((false, "Bạn đã nhập sai quá số lần quy định. Vui lòng yêu cầu mã OTP mới."));
+            }
+
             return Task.FromResult((false, "Mã OTP không chính xác."));
         }
 
+        _memoryCache.Remove(attemptsKey);
         return Task.FromResult((true, "Xác thực OTP thành công."));
     }
 

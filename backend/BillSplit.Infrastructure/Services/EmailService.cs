@@ -21,10 +21,17 @@ public class EmailService : IEmailService
     {
         try
         {
+            // Mật khẩu ứng dụng Gmail BẮT BUỘC lấy từ cấu hình (User Secrets / biến môi trường),
+            // không hardcode trong source code để tránh lộ mật khẩu thật qua lịch sử git.
+            var smtpPass = _configuration["Smtp:Password"]
+                ?? throw new InvalidOperationException(
+                    "Thiếu cấu hình 'Smtp:Password'. Hãy đặt qua biến môi trường Smtp__Password hoặc " +
+                    "chạy: dotnet user-secrets set \"Smtp:Password\" \"<mật khẩu ứng dụng Gmail>\"");
+
             var smtpHost = _configuration["Smtp:Host"] ?? "smtp.gmail.com";
             var smtpPort = int.Parse(_configuration["Smtp:Port"] ?? "587");
-            var smtpUser = _configuration["Smtp:Username"] ?? "nang14dz@gmail.com";
-            var smtpPass = _configuration["Smtp:Password"] ?? "petr jxhc zdhh jrot";
+            var smtpUser = _configuration["Smtp:Username"]
+                ?? throw new InvalidOperationException("Thiếu cấu hình 'Smtp:Username'.");
             var fromName = _configuration["Smtp:SenderName"] ?? "Sổ Nợ";
 
             using var message = new MailMessage();
