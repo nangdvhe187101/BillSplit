@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Bảng màu Xanh Bầu Trời (Sky Blue) kết hợp Trắng Nhẹ (Soft White)
 class AppColors {
   // Gam màu Xanh Bầu Trời chủ đạo
   static const Color primary = Color(0xFF0EA5E9);       // Sky Blue tươi sáng, hiện đại
   static const Color primaryDark = Color(0xFF0284C7);   // Xanh biển đậm cho nhấn mạnh
+  static const Color primaryDarker = Color(0xFF075985); // Xanh biển sâu cho gradient hero
   static const Color primaryLight = Color(0xFFBAE6FD);  // Xanh trời nhạt cho viền và badge
   static const Color primarySoft = Color(0xFFE0F2FE);   // Xanh mây nền nhẹ nhàng
 
@@ -25,11 +27,33 @@ class AppColors {
   static const Color warning = Color(0xFFF59E0B);       // Vàng cam cảnh báo
 }
 
+/// Đường dẫn tới bộ icon SVG riêng của ứng dụng (thay thế icon Material mặc định
+/// ở các khu vực mang tính thương hiệu: Quick Actions, trạng thái nợ, trust badge).
+class AppIcons {
+  static const String logoMark = 'assets/branding/logo_mark.svg';
+
+  static const String actionQrReceive = 'assets/icons/action_qr_receive.svg';
+  static const String actionNewBill = 'assets/icons/action_new_bill.svg';
+  static const String actionGroup = 'assets/icons/action_group.svg';
+  static const String actionFriends = 'assets/icons/action_friends.svg';
+
+  static const String statusSettled = 'assets/icons/status_settled.svg';
+  static const String statusPending = 'assets/icons/status_pending.svg';
+  static const String badgeShieldCheck = 'assets/icons/badge_shield_check.svg';
+}
+
 /// Cấu hình Theme chuẩn cho toàn bộ ứng dụng Flutter
 class AppTheme {
   static ThemeData get lightTheme {
+    final baseTextTheme = GoogleFonts.beVietnamProTextTheme();
+
     return ThemeData(
       useMaterial3: true,
+      fontFamily: GoogleFonts.beVietnamPro().fontFamily,
+      textTheme: baseTextTheme.apply(
+        bodyColor: AppColors.textPrimary,
+        displayColor: AppColors.textPrimary,
+      ),
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,

@@ -17,6 +17,14 @@ obj/
 .idea/
 .vscode/
 
+# Secrets - KHÔNG commit, dùng dotnet user-secrets hoặc biến môi trường thay thế
+backend/BillSplit.Api/appsettings.json
+backend/BillSplit.Api/appsettings.Development.json
+backend/BillSplit.Api/appsettings.*.json
+!backend/BillSplit.Api/appsettings.Example.json
+.env
+.env.*
+
 # SQLite databases
 *.db
 *.db-shm
