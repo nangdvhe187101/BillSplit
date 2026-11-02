@@ -12,7 +12,9 @@ import '../../data/repositories/statistics_repository.dart';
 import '../widgets/edit_profile_dialog.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final bool autoRefresh;
+
+  const HomePage({super.key, this.autoRefresh = false});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -31,6 +33,14 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _statisticsRepository = StatisticsRepository(dioClient: context.read<DioClient>());
     _loadStats();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.autoRefresh) {
+      _loadStats();
+    }
   }
 
   Future<void> _loadStats() async {
@@ -245,26 +255,39 @@ class _HomePageState extends State<HomePage> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Mọi người đang nợ bạn
+                          // Mọi người đang nợ bạn (Bấm để xem sổ nợ gộp theo người)
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Mọi người đang nợ bạn',
-                                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _isLoading ? '...' : '${_currencyFormat.format(totalReceivable)} đ',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.3,
+                            child: InkWell(
+                              onTap: () async {
+                                await context.push('/person-debts');
+                                _loadStats();
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Text(
+                                        'Mọi người đang nợ bạn',
+                                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                                      ),
+                                      SizedBox(width: 4),
+                                      Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 10),
+                                    ],
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _isLoading ? '...' : '${_currencyFormat.format(totalReceivable)} đ',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.22)),
@@ -315,7 +338,96 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
+
+                // BANNER CHỨC NĂNG RIÊNG: SỔ NỢ GỘP THEO TỪNG NGƯỜI
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.primaryLight, width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primarySoft.withValues(alpha: 0.35),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () async {
+                        await context.push('/person-debts');
+                        _loadStats();
+                      },
+                      borderRadius: BorderRadius.circular(18),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [AppColors.primary, AppColors.primaryDark],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Icon(Icons.calculate_rounded, color: Colors.white, size: 26),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'Sổ nợ gộp theo người',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primarySoft,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Text(
+                                          'Tự cộng dồn',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.primaryDark,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  const Text(
+                                    'Cộng dồn tất cả bill của từng người & xem lịch sử nợ',
+                                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right_rounded, color: AppColors.primary, size: 24),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
 
                 // 2. Tiện Ích Thao Tác Nhanh (Quick Actions) — bộ icon SVG riêng của ứng dụng
                 Row(
@@ -324,10 +436,10 @@ class _HomePageState extends State<HomePage> {
                     _buildQuickAction(
                       iconAsset: AppIcons.actionQrReceive,
                       label: 'QR nhận tiền',
-                      onTap: () {
+                      onTap: () async {
                         final authState = context.read<AuthBloc>().state;
                         final user = authState is Authenticated ? authState.user : null;
-                        context.push(
+                        await context.push(
                           '/qr-payment',
                           extra: {
                             'debtId': null,
@@ -337,22 +449,32 @@ class _HomePageState extends State<HomePage> {
                             'title': 'Mã QR nhận tiền của ${user?.fullName ?? "bạn"}',
                           },
                         );
+                        _loadStats();
                       },
                     ),
                     _buildQuickAction(
                       iconAsset: AppIcons.actionNewBill,
                       label: 'Tạo bill mới',
-                      onTap: () => context.push('/split'),
+                      onTap: () async {
+                        await context.push('/split');
+                        _loadStats();
+                      },
                     ),
                     _buildQuickAction(
                       iconAsset: AppIcons.actionGroup,
                       label: 'Tạo nhóm',
-                      onTap: () => context.push('/groups'),
+                      onTap: () async {
+                        await context.push('/groups');
+                        _loadStats();
+                      },
                     ),
                     _buildQuickAction(
                       iconAsset: AppIcons.actionFriends,
                       label: 'Bạn bè',
-                      onTap: () => context.push('/friends'),
+                      onTap: () async {
+                        await context.push('/friends');
+                        _loadStats();
+                      },
                     ),
                   ],
                 ),

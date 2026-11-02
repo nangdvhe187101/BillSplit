@@ -52,6 +52,14 @@ public class DebtsController : ControllerBase
         return Ok(debts);
     }
 
+    [HttpGet("by-person")]
+    public async Task<IActionResult> GetDebtsByPerson([FromQuery] bool asCreditor = true)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _debtService.GetDebtsGroupedByPersonAsync(userId, asCreditor);
+        return Ok(result);
+    }
+
     [HttpPost("auto-settle")]
     public async Task<IActionResult> AutoSettle([FromBody] AutoSettleRequestDto request)
     {

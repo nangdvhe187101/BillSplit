@@ -11,8 +11,19 @@ import '../../data/utils/bill_ocr_parser.dart';
 class BillScanResult {
   final double totalAmount;
   final List<SplitMember> members; // Đã cập nhật personalAmount theo món riêng
+  final String? billTitle;
+  final double subtotal;
+  final double vat;
+  final double discount;
 
-  BillScanResult({required this.totalAmount, required this.members});
+  BillScanResult({
+    required this.totalAmount,
+    required this.members,
+    this.billTitle,
+    this.subtotal = 0.0,
+    this.vat = 0.0,
+    this.discount = 0.0,
+  });
 }
 
 /// Màn hình quét ảnh hóa đơn bằng Google ML Kit (chạy offline trên máy) và
@@ -38,6 +49,11 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
   bool _isScanning = true;
   String? _errorMessage;
   List<BillLineItem> _items = [];
+  double _billTotalAmount = 0.0;
+  double _subtotal = 0.0;
+  double _vat = 0.0;
+  double _discount = 0.0;
+  String? _billTitle;
 
   @override
   void initState() {
@@ -60,16 +76,23 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
     try {
       final inputImage = InputImage.fromFile(widget.imageFile);
       final result = await _textRecognizer.processImage(inputImage);
-      final parsed = BillOcrParser.parse(result.text);
+      final parsed = BillOcrParser.parseFromRecognizedText(result);
 
-      if (parsed.isEmpty) {
+      if (parsed.items.isEmpty && parsed.totalAmount <= 0) {
         setState(() {
-          _errorMessage = 'Không nhận diện được món ăn nào từ ảnh. Vui lòng chụp rõ hơn hoặc thêm món bằng tay.';
+          _errorMessage =
+              'Không nhận diện được món ăn nào từ ảnh. Vui lòng chụp rõ hơn hoặc thêm món bằng tay.';
           _items = [];
+          _billTotalAmount = 0.0;
         });
       } else {
         setState(() {
-          _items = parsed;
+          _items = parsed.items;
+          _billTotalAmount = parsed.totalAmount;
+          _subtotal = parsed.subtotal;
+          _vat = parsed.vat;
+          _discount = parsed.discount;
+          _billTitle = parsed.billTitle;
         });
       }
     } catch (e) {
@@ -83,7 +106,65 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
     }
   }
 
-  double get _totalAmount => _items.fold(0.0, (sum, item) => sum + item.price);
+  double get _effectiveTotalAmount {
+    if (_billTotalAmount > 0) {
+      return _billTotalAmount;
+    }
+    return _items.fold(0.0, (sum, item) => sum + item.price);
+  }
+
+  void _showEditTotalDialog() {
+    final controller = TextEditingController(
+      text: _effectiveTotalAmount > 0 ? _effectiveTotalAmount.toInt().toString() : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Sửa tổng tiền hóa đơn', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Nhập số tiền Tổng cộng thực tế ghi trên hóa đơn (bao gồm cả VAT/phụ phí nếu có):',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Tổng tiền (VNĐ)',
+                suffixText: 'đ',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Hủy', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = double.tryParse(controller.text.replaceAll('.', '').replaceAll(',', '')) ?? 0.0;
+              if (val > 0) {
+                setState(() {
+                  _billTotalAmount = val;
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _addManualItem() {
     setState(() {
@@ -216,7 +297,96 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
 
     Navigator.pop(
       context,
-      BillScanResult(totalAmount: _totalAmount, members: widget.members),
+      BillScanResult(
+        totalAmount: _effectiveTotalAmount,
+        members: widget.members,
+        billTitle: _billTitle,
+        subtotal: _subtotal,
+        vat: _vat,
+        discount: _discount,
+      ),
+    );
+  }
+
+  Widget _buildTotalSection() {
+    final sumItems = _items.fold(0.0, (sum, it) => sum + it.price);
+    final hasTaxOrDiff = (_effectiveTotalAmount - sumItems).abs() > 1.0;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primaryLight, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Text(
+                        'TỔNG TIỀN HÓA ĐƠN (CẦN CHIA)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryDark,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.verified_rounded, size: 14, color: AppColors.primary),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_currencyFormat.format(_effectiveTotalAmount)} đ',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primaryDarker,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+              IconButton.filledTonal(
+                onPressed: _showEditTotalDialog,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                tooltip: 'Sửa tổng tiền',
+              ),
+            ],
+          ),
+          if (hasTaxOrDiff) ...[
+            const Divider(color: AppColors.primaryLight, height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Tổng tiền ${_items.length} món: ${_currencyFormat.format(sumItems)} đ',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                Text(
+                  _effectiveTotalAmount > sumItems
+                      ? 'Thuế/Phụ phí: +${_currencyFormat.format(_effectiveTotalAmount - sumItems)} đ'
+                      : 'Giảm giá: -${_currencyFormat.format(sumItems - _effectiveTotalAmount)} đ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _effectiveTotalAmount > sumItems ? AppColors.warning : AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -268,22 +438,27 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
                               ),
                             ),
                           const SizedBox(height: 8),
+
+                          // Thẻ hiển thị TỔNG TIỀN HÓA ĐƠN thực tế
+                          _buildTotalSection(),
+
+                          const SizedBox(height: 10),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                'Danh sách món quét được',
-                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                              Text(
+                                'Món ăn nhận diện (${_items.length} món)',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                               ),
                               Text(
-                                'Tổng: ${_currencyFormat.format(_totalAmount)} đ',
-                                style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary),
+                                '${_currencyFormat.format(_items.fold(0.0, (sum, it) => sum + it.price))} đ',
+                                style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
                               ),
                             ],
                           ),
                           const SizedBox(height: 4),
                           const Text(
-                            'Chạm chip tên người để gán món riêng, hoặc chọn "Ăn chung" để chia đều cho nhóm.',
+                            'Chạm chip tên người để gán món riêng, hoặc chọn "Ăn chung" để chia đều cho cả nhóm.',
                             style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                           const SizedBox(height: 12),

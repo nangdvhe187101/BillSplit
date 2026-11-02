@@ -45,6 +45,7 @@ public interface IDebtService
     Task<(bool Success, string Message, List<DebtDetailDto>? Debts)> SplitExpenseAsync(Guid creditorId, SplitExpenseRequestDto request);
     Task<NetBalanceSummaryDto> GetNetBalanceSummaryAsync(Guid userId);
     Task<List<DebtDetailDto>> GetDebtsAsync(Guid userId, string? status, bool asCreditor);
+    Task<List<PersonDebtSummaryDto>> GetDebtsGroupedByPersonAsync(Guid userId, bool asCreditor);
     Task<(bool Success, string Message, DebtDetailDto? SettledDebt)> AutoSettleByMessageAsync(Guid creditorId, AutoSettleRequestDto request);
     Task<(bool Success, string Message)> ManualSettleAsync(Guid creditorId, Guid debtId);
 }
