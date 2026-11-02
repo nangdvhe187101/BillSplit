@@ -49,10 +49,6 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
   bool _isScanning = true;
   String? _errorMessage;
   List<BillLineItem> _items = [];
-  double _billTotalAmount = 0.0;
-  double _subtotal = 0.0;
-  double _vat = 0.0;
-  double _discount = 0.0;
   String? _billTitle;
 
   @override
@@ -78,20 +74,15 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
       final result = await _textRecognizer.processImage(inputImage);
       final parsed = BillOcrParser.parseFromRecognizedText(result);
 
-      if (parsed.items.isEmpty && parsed.totalAmount <= 0) {
+      if (parsed.items.isEmpty) {
         setState(() {
           _errorMessage =
               'Không nhận diện được món ăn nào từ ảnh. Vui lòng chụp rõ hơn hoặc thêm món bằng tay.';
           _items = [];
-          _billTotalAmount = 0.0;
         });
       } else {
         setState(() {
           _items = parsed.items;
-          _billTotalAmount = parsed.totalAmount;
-          _subtotal = parsed.subtotal;
-          _vat = parsed.vat;
-          _discount = parsed.discount;
           _billTitle = parsed.billTitle;
         });
       }
@@ -106,62 +97,20 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
     }
   }
 
-  double get _effectiveTotalAmount {
-    if (_billTotalAmount > 0) {
-      return _billTotalAmount;
-    }
-    return _items.fold(0.0, (sum, item) => sum + item.price);
-  }
+  double get _totalAmount => _items.fold(0.0, (sum, item) => sum + item.price);
 
-  void _showEditTotalDialog() {
-    final controller = TextEditingController(
-      text: _effectiveTotalAmount > 0 ? _effectiveTotalAmount.toInt().toString() : '',
-    );
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Sửa tổng tiền hóa đơn', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Nhập số tiền Tổng cộng thực tế ghi trên hóa đơn (bao gồm cả VAT/phụ phí nếu có):',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Tổng tiền (VNĐ)',
-                suffixText: 'đ',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Hủy', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final val = double.tryParse(controller.text.replaceAll('.', '').replaceAll(',', '')) ?? 0.0;
-              if (val > 0) {
-                setState(() {
-                  _billTotalAmount = val;
-                });
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Lưu'),
-          ),
-        ],
+  void _setAllItemsShared() {
+    setState(() {
+      for (final item in _items) {
+        item.isShared = true;
+        item.assignedMemberIds.clear();
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đã chọn tất cả món là "Ăn chung cả nhóm"'),
+        duration: Duration(milliseconds: 1500),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -298,94 +247,12 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
     Navigator.pop(
       context,
       BillScanResult(
-        totalAmount: _effectiveTotalAmount,
+        totalAmount: _totalAmount,
         members: widget.members,
         billTitle: _billTitle,
-        subtotal: _subtotal,
-        vat: _vat,
-        discount: _discount,
-      ),
-    );
-  }
-
-  Widget _buildTotalSection() {
-    final sumItems = _items.fold(0.0, (sum, it) => sum + it.price);
-    final hasTaxOrDiff = (_effectiveTotalAmount - sumItems).abs() > 1.0;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primaryLight, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Text(
-                        'TỔNG TIỀN HÓA ĐƠN (CẦN CHIA)',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryDark,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      SizedBox(width: 4),
-                      Icon(Icons.verified_rounded, size: 14, color: AppColors.primary),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${_currencyFormat.format(_effectiveTotalAmount)} đ',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryDarker,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              IconButton.filledTonal(
-                onPressed: _showEditTotalDialog,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                tooltip: 'Sửa tổng tiền',
-              ),
-            ],
-          ),
-          if (hasTaxOrDiff) ...[
-            const Divider(color: AppColors.primaryLight, height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Tổng tiền ${_items.length} món: ${_currencyFormat.format(sumItems)} đ',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                Text(
-                  _effectiveTotalAmount > sumItems
-                      ? 'Thuế/Phụ phí: +${_currencyFormat.format(_effectiveTotalAmount - sumItems)} đ'
-                      : 'Giảm giá: -${_currencyFormat.format(sumItems - _effectiveTotalAmount)} đ',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _effectiveTotalAmount > sumItems ? AppColors.warning : AppColors.success,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
+        subtotal: _totalAmount,
+        vat: 0.0,
+        discount: 0.0,
       ),
     );
   }
@@ -437,28 +304,57 @@ class _BillScanAssignPageState extends State<BillScanAssignPage> {
                                 style: const TextStyle(color: AppColors.error, fontSize: 13),
                               ),
                             ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
 
-                          // Thẻ hiển thị TỔNG TIỀN HÓA ĐƠN thực tế
-                          _buildTotalSection(),
-
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Món ăn nhận diện (${_items.length} món)',
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                              ),
-                              Text(
-                                '${_currencyFormat.format(_items.fold(0.0, (sum, it) => sum + it.price))} đ',
-                                style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
-                              ),
-                            ],
+                          // Thanh trạng thái: Số món, Tổng tiền thực tế và Nút "Ăn chung tất cả"
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Món nhận diện (${_items.length} món)',
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_currencyFormat.format(_totalAmount)} đ',
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.primaryDark,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: _items.isEmpty ? null : _setAllItemsShared,
+                                  icon: const Icon(Icons.groups_rounded, size: 18),
+                                  label: const Text('Ăn chung tất cả'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primarySoft,
+                                    foregroundColor: AppColors.primaryDark,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 4),
+
+                          const SizedBox(height: 14),
                           const Text(
-                            'Chạm chip tên người để gán món riêng, hoặc chọn "Ăn chung" để chia đều cho cả nhóm.',
+                            'Chạm chip tên người để gán món riêng, hoặc bấm "Ăn chung tất cả" để chia đều cho cả nhóm.',
                             style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                           const SizedBox(height: 12),

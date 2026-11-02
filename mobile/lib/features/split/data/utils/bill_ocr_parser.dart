@@ -41,34 +41,17 @@ class BillOcrParser {
     caseSensitive: false,
   );
 
-  // Regex nhận diện TIÊU ĐỀ BẢNG CỘT (Tên hàng, Đ.giá, SL, TT...)
+  // Regex nhận diện TIÊU ĐỀ BẢNG CỘT (Tên hàng, en hàng, Đ.giá, SL, TT...)
   static final RegExp _tableHeaderRegex = RegExp(
-    r'^(tên\s*hàng|tên\s*món|mặt\s*hàng|đơn\s*giá|đ\.giá|giá|số\s*lượng|sl|thành\s*tiền|tt|stt|item|price|qty|amount)\b',
+    r'(?:^|[^\w])(tên\s*hàng|en\s*hàng|tên\s*món|mặt\s*hàng|đơn\s*giá|đ\.?giá|giá|số\s*lượng|\bsl\b|thành\s*tiền|\btt\b|\bstt\b|item|price|qty|amount)\b',
     caseSensitive: false,
   );
 
-  // Regex nhận diện DÒNG TỔNG CỘNG / TỔNG BILL (Quan trọng nhất để lấy tổng tiền hóa đơn)
-  static final RegExp _totalKeywordRegex = RegExp(
-    r'(tổng\s*cộng|tong\s*cong|tổng\s*tiền|tong\s*tien|tổng\s*thanh\s*toán|cần\s*thanh\s*toán|phải\s*thanh\s*toán|thanh\s*toán|total|grand\s*total)',
+  // Regex nhận diện các từ khóa tổng kết, thuế, thanh toán (Tuyệt đối KHÔNG đưa vào danh sách món)
+  static final RegExp _summaryKeywordRegex = RegExp(
+    r'(tổng\s*cộng|tong\s*cong|tổng\s*tiền|tong\s*tien|tổng\s*thanh\s*toán|cần\s*thanh\s*toán|phải\s*thanh\s*toán|thanh\s*toán|tổng\s*thành\s*tiền|tiền\s*hàng|tạm\s*tính|tiền\s*khách\s*trả|khách\s*đưa|tiền\s*mặt|chuyển\s*khoản|tiền\s*thừa|tiền\s*thối|\bvat\b|thuế|thue|chiết\s*khấu|giảm\s*giá|khuyến\s*mãi|total|subtotal|cash|change|due|balance)',
     caseSensitive: false,
   );
-
-  // Regex nhận diện TỔNG THÀNH TIỀN (Subtotal trước thuế/giảm giá)
-  static final RegExp _subtotalKeywordRegex = RegExp(
-    r'(tổng\s*thành\s*tiền|tiền\s*hàng|tạm\s*tính|subtotal)',
-    caseSensitive: false,
-  );
-
-  // Regex nhận diện TIỀN KHÁCH TRẢ
-  static final RegExp _paymentReceivedKeywordRegex = RegExp(
-    r'(tiền\s*khách\s*trả|khách\s*đưa|tiền\s*mặt|chuyển\s*khoản|cash|paid)',
-    caseSensitive: false,
-  );
-
-  // Regex nhận diện các dòng phụ phí / thuế / giảm giá
-  static final RegExp _vatKeywordRegex = RegExp(r'(vat|thuế|thue)', caseSensitive: false);
-  static final RegExp _discountKeywordRegex = RegExp(r'(giảm\s*giá|chiết\s*khấu|discount|khuyến\s*mãi)', caseSensitive: false);
-  static final RegExp _changeKeywordRegex = RegExp(r'(tiền\s*thừa|tiền\s*thối|change)', caseSensitive: false);
 
   /// Phân tích hóa đơn từ RecognizedText của Google ML Kit (khuyên dùng vì có tọa độ 2D)
   static ParsedBillResult parseFromRecognizedText(RecognizedText recognizedText) {
@@ -100,11 +83,6 @@ class BillOcrParser {
     final lines = rawLines.map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
 
     final items = <BillLineItem>[];
-    double detectedTotal = 0.0;
-    double detectedSubtotal = 0.0;
-    double detectedVat = 0.0;
-    double detectedDiscount = 0.0;
-    double detectedCustomerPaid = 0.0;
     String? detectedTitle;
 
     int autoIndex = 0;
@@ -113,62 +91,17 @@ class BillOcrParser {
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i];
 
-      // A. KIỂM TRA DÒNG TỔNG CỘNG / TỔNG BILL
-      if (_totalKeywordRegex.hasMatch(line)) {
-        final amount = _extractLastPrice(line);
-        if (amount != null && amount > 0) {
-          detectedTotal = amount;
-        }
+      // A. BỎ QUA CÁC DÒNG TỔNG CỘNG / TỔNG TIỀN / THUẾ / THANH TOÁN (Không lấy tổng tiền từ ảnh)
+      if (_summaryKeywordRegex.hasMatch(line)) {
         continue;
       }
 
-      // B. KIỂM TRA DÒNG TỔNG THÀNH TIỀN (SUBTOTAL)
-      if (_subtotalKeywordRegex.hasMatch(line)) {
-        final amount = _extractLastPrice(line);
-        if (amount != null && amount > 0) {
-          detectedSubtotal = amount;
-        }
-        continue;
-      }
-
-      // C. KIỂM TRA TIỀN KHÁCH TRẢ
-      if (_paymentReceivedKeywordRegex.hasMatch(line)) {
-        final amount = _extractLastPrice(line);
-        if (amount != null && amount > 0) {
-          detectedCustomerPaid = amount;
-        }
-        continue;
-      }
-
-      // D. KIỂM TRA VAT
-      if (_vatKeywordRegex.hasMatch(line)) {
-        final amount = _extractLastPrice(line);
-        if (amount != null && amount > 0) {
-          detectedVat = amount;
-        }
-        continue;
-      }
-
-      // E. KIỂM TRA GIẢM GIÁ
-      if (_discountKeywordRegex.hasMatch(line)) {
-        final amount = _extractLastPrice(line);
-        if (amount != null && amount > 0) {
-          detectedDiscount = amount;
-        }
-        continue;
-      }
-
-      // F. KIỂM TRA TIỀN THỪA / THỐI
-      if (_changeKeywordRegex.hasMatch(line)) {
-        continue;
-      }
-
-      // G. KIỂM TRA TIÊU ĐỀ BẢNG (Tên hàng, Đ.giá, SL, TT...)
+      // B. BỎ QUA TIÊU ĐỀ BẢNG (Tên hàng, Đ.giá, SL, TT...)
       if (_tableHeaderRegex.hasMatch(line)) {
         continue;
       }
 
-      // H. KIỂM TRA DÒNG THÔNG TIN QUÁN / NGÀY GIỜ / BÀN SỐ
+      // C. BỎ QUA DÒNG THÔNG TIN QUÁN / NGÀY GIỜ / BÀN SỐ
       if (_headerKeywordRegex.hasMatch(line)) {
         if (detectedTitle == null && (line.toLowerCase().contains('hóa đơn') || line.toLowerCase().contains('hoá đơn'))) {
           detectedTitle = 'Hóa đơn ăn uống';
@@ -176,7 +109,7 @@ class BillOcrParser {
         continue;
       }
 
-      // I. BÓC TÁCH DÒNG MÓN ĂN THỰC SỰ
+      // D. BÓC TÁCH DÒNG MÓN ĂN THỰC SỰ
       // Một dòng món ăn hợp lệ phải có Tên món (chữ cái) và Số tiền
       final parsedItem = _parseItemFromLine(line);
       if (parsedItem != null) {
@@ -192,46 +125,37 @@ class BillOcrParser {
         // Trường hợp tên món ở dòng hiện tại, giá tiền ở dòng kế tiếp (Lookahead 1 dòng)
         if (i + 1 < lines.length) {
           final nextLine = lines[i + 1];
-          final combinedLine = '$line $nextLine';
-          final combinedItem = _parseItemFromLine(combinedLine);
-          if (combinedItem != null) {
-            items.add(
-              BillLineItem(
-                id: 'ocr-${DateTime.now().millisecondsSinceEpoch}-$autoIndex',
-                name: combinedItem.name,
-                price: combinedItem.price,
-              ),
-            );
-            autoIndex++;
-            i++; // Bỏ qua dòng kế tiếp vì đã ghép
+          // Nếu dòng kế tiếp là summary hoặc header thì không ghép
+          if (!_summaryKeywordRegex.hasMatch(nextLine) &&
+              !_tableHeaderRegex.hasMatch(nextLine) &&
+              !_headerKeywordRegex.hasMatch(nextLine)) {
+            final combinedLine = '$line $nextLine';
+            final combinedItem = _parseItemFromLine(combinedLine);
+            if (combinedItem != null) {
+              items.add(
+                BillLineItem(
+                  id: 'ocr-${DateTime.now().millisecondsSinceEpoch}-$autoIndex',
+                  name: combinedItem.name,
+                  price: combinedItem.price,
+                ),
+              );
+              autoIndex++;
+              i++; // Bỏ qua dòng kế tiếp vì đã ghép
+            }
           }
         }
       }
     }
 
-    // TÍNH TOÁN TỔNG BILL CHUẨN XÁC:
-    // Ưu tiên 1: Dòng "Tổng cộng" rõ ràng trên hóa đơn (ví dụ 334.000 đ)
-    // Ưu tiên 2: "Tiền khách trả" nếu có và > 0
-    // Ưu tiên 3: "Tổng thành tiền" + VAT - Discount nếu có
-    // Ưu tiên 4: Tổng các món ăn nhận diện được
+    // TỔNG BILL = TỔNG TIỀN CỦA CÁC MÓN NHẬN DIỆN ĐƯỢC
+    // Bỏ việc bóc tách số tiền tổng riêng từ ảnh theo yêu cầu người dùng
     final sumItems = items.fold(0.0, (sum, it) => sum + it.price);
-    double finalTotal = detectedTotal;
-
-    if (finalTotal <= 0) {
-      if (detectedCustomerPaid > 0 && detectedCustomerPaid >= sumItems) {
-        finalTotal = detectedCustomerPaid;
-      } else if (detectedSubtotal > 0) {
-        finalTotal = detectedSubtotal + detectedVat - detectedDiscount;
-      } else {
-        finalTotal = sumItems;
-      }
-    }
 
     return ParsedBillResult(
-      totalAmount: finalTotal,
-      subtotal: detectedSubtotal > 0 ? detectedSubtotal : sumItems,
-      vat: detectedVat,
-      discount: detectedDiscount,
+      totalAmount: sumItems,
+      subtotal: sumItems,
+      vat: 0.0,
+      discount: 0.0,
       items: items,
       billTitle: detectedTitle,
     );
@@ -242,6 +166,9 @@ class BillOcrParser {
   /// -> Tên: "Sữa tươi đường đen"
   /// -> Giá: 28000
   static ({String name, double price})? _parseItemFromLine(String line) {
+    // Nếu dòng chứa từ khóa tổng kết, thuế, thanh toán thì bỏ qua ngay
+    if (_summaryKeywordRegex.hasMatch(line)) return null;
+
     // 1. Tìm tất cả các số tiền hợp lệ trong dòng
     final matches = _findAllPrices(line);
     if (matches.isEmpty) return null;
@@ -254,6 +181,12 @@ class BillOcrParser {
     var name = line.substring(0, firstMatch.start).trim();
 
     // Làm sạch tên món:
+    // Loại bỏ tiền tố tiêu đề bảng nếu bị dính vào đầu: "en hàng", "tên hàng", "đ.giá", "sl", "tt", etc.
+    name = name.replaceAll(
+      RegExp(r'^(?:tên\s*hàng|en\s*hàng|mặt\s*hàng|đ\.?giá|đơn\s*giá|sl|số\s*lượng|tt|stt|item|price|qty|amount)[\s\d:.,/|-]*', caseSensitive: false),
+      '',
+    ).trim();
+
     // Loại bỏ số thứ tự đầu dòng: "1.", "1)", "01 ", "1 "
     name = name.replaceFirst(RegExp(r'^\d{1,2}[.)\s]+'), '').trim();
     // Loại bỏ các ký tự phân cách còn sót
@@ -277,8 +210,10 @@ class BillOcrParser {
       return null;
     }
 
-    // Không chấp nhận tên món là các từ khóa hệ thống
-    if (_headerKeywordRegex.hasMatch(name) || _tableHeaderRegex.hasMatch(name)) {
+    // Không chấp nhận tên món là các từ khóa hệ thống, tổng kết hay tiêu đề
+    if (_summaryKeywordRegex.hasMatch(name) ||
+        _headerKeywordRegex.hasMatch(name) ||
+        _tableHeaderRegex.hasMatch(name)) {
       return null;
     }
 
@@ -300,8 +235,8 @@ class BillOcrParser {
       totalHeight += line.boundingBox.height;
     }
     final avgHeight = totalHeight / allLines.length;
-    // Ngưỡng dung sai trục Y: hai chữ nằm trên cùng hàng nếu tâm Y chênh lệch không quá 65% chiều cao dòng
-    final yTolerance = (avgHeight * 0.65).clamp(8.0, 30.0);
+    // Ngưỡng dung sai trục Y chặt chẽ hơn để tránh dính dòng tiêu đề cột vào dòng đầu tiên của món
+    final yTolerance = (avgHeight * 0.35).clamp(4.0, 12.0);
 
     // Sắp xếp các dòng từ trên xuống dưới theo trục Y
     allLines.sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
@@ -361,14 +296,5 @@ class BillOcrParser {
     }
 
     return results;
-  }
-
-  /// Lấy số tiền cuối cùng trên dòng (thường là số tiền của dòng đó)
-  static double? _extractLastPrice(String line) {
-    final prices = _findAllPrices(line);
-    if (prices.isNotEmpty) {
-      return prices.last.value;
-    }
-    return null;
   }
 }
