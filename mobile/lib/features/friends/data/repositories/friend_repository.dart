@@ -30,18 +30,20 @@ class FriendRepository {
     return list.map((e) => FriendModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  /// Gửi lời mời kết bạn tới số điện thoại đã đăng ký. Lời mời ở trạng thái
-  /// Pending cho tới khi người kia đồng ý (bankBin/bankAccountNo chưa lộ ra).
-  Future<FriendActionResult> addFriendByPhone(String phoneNumber) async {
+  /// Thêm bạn bè qua số điện thoại (tự động kết nối và hỗ trợ tên gợi nhớ)
+  Future<FriendActionResult> addFriendByPhone(String phoneNumber, {String? fullName}) async {
     try {
       final response = await dioClient.dio.post(
         '/friends/add',
-        data: {'phoneNumber': phoneNumber},
+        data: {
+          'phoneNumber': phoneNumber,
+          if (fullName != null && fullName.isNotEmpty) 'fullName': fullName,
+        },
       );
       final data = response.data as Map<String, dynamic>;
       return FriendActionResult(
         success: true,
-        message: data['message'] as String? ?? 'Đã gửi lời mời kết bạn.',
+        message: data['message'] as String? ?? 'Đã thêm bạn bè thành công.',
       );
     } on DioException catch (e) {
       return FriendActionResult(success: false, message: _extractError(e));

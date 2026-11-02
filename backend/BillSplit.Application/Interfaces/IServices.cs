@@ -26,7 +26,7 @@ public interface IBankService
 
 public interface IFriendService
 {
-    Task<(bool Success, string Message, FriendDto? Data)> AddFriendByPhoneAsync(Guid currentUserId, string phoneNumber);
+    Task<(bool Success, string Message, FriendDto? Data)> AddFriendByPhoneAsync(Guid currentUserId, string phoneNumber, string? fullName = null);
     Task<(bool Success, string Message)> AcceptFriendRequestAsync(Guid currentUserId, Guid friendshipId);
     Task<List<FriendDto>> GetFriendsWithNetBalanceAsync(Guid currentUserId);
     Task<List<FriendDto>> GetPendingRequestsAsync(Guid currentUserId);

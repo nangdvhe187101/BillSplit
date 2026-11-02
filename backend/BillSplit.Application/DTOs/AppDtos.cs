@@ -4,7 +4,7 @@ using BillSplit.Domain.Enums;
 namespace BillSplit.Application.DTOs;
 
 // --- DTOs cho BẠN BÈ & BÙ TRỪ CÔNG NỢ ---
-public record AddFriendRequestDto(string PhoneNumber);
+public record AddFriendRequestDto(string PhoneNumber, string? FullName = null);
 
 public record FriendDto(
     Guid Id,
@@ -49,7 +49,8 @@ public record GroupDto(
 public record SplitDebtItemDto(
     Guid? DebtorId,
     string? CustomDebtorName,
-    decimal Amount
+    decimal Amount,
+    string? DebtorPhone = null
 );
 
 public record SplitExpenseRequestDto(

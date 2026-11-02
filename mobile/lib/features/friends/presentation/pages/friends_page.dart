@@ -15,6 +15,7 @@ class FriendsPage extends StatefulWidget {
 
 class _FriendsPageState extends State<FriendsPage> {
   final _phoneController = TextEditingController();
+  final _nameController = TextEditingController();
   final NumberFormat _currencyFormat = NumberFormat('#,###', 'vi_VN');
 
   late final FriendRepository _repository;
@@ -33,6 +34,7 @@ class _FriendsPageState extends State<FriendsPage> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -88,7 +90,7 @@ class _FriendsPageState extends State<FriendsPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Nhập số điện thoại đã đăng ký tài khoản BillSplit:',
+              'Nhập số điện thoại để kết bạn và chia tiền:',
               style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 12),
@@ -97,21 +99,37 @@ class _FriendsPageState extends State<FriendsPage> {
               keyboardType: TextInputType.phone,
               autofocus: true,
               decoration: const InputDecoration(
+                labelText: 'Số điện thoại *',
                 hintText: 'Ví dụ: 0912345678',
                 prefixIcon: Icon(Icons.phone_iphone_rounded, color: AppColors.primary),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Tên bạn bè (tùy chọn)',
+                hintText: 'Ví dụ: Tuấn, Huy, Nam...',
+                prefixIcon: Icon(Icons.person_outline, color: AppColors.primary),
               ),
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              _phoneController.clear();
+              _nameController.clear();
+              Navigator.pop(context);
+            },
             child: const Text('Hủy', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () async {
               final rawPhone = _phoneController.text.trim();
               final phone = rawPhone.replaceAll(RegExp(r'[\s.-]'), '');
+              final name = _nameController.text.trim();
+
               if (phone.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -122,10 +140,14 @@ class _FriendsPageState extends State<FriendsPage> {
                 return;
               }
 
-              final result = await _repository.addFriendByPhone(phone);
+              final result = await _repository.addFriendByPhone(
+                phone,
+                fullName: name.isNotEmpty ? name : null,
+              );
               if (!context.mounted) return;
 
               _phoneController.clear();
+              _nameController.clear();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

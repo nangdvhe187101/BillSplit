@@ -8,6 +8,8 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/split_member_model.dart';
 import '../../data/repositories/debt_repository.dart';
+import '../../../friends/data/models/friend_model.dart';
+import '../../../friends/data/repositories/friend_repository.dart';
 import 'bill_scan_assign_page.dart';
 
 class SplitBillPage extends StatefulWidget {
@@ -29,11 +31,13 @@ class _SplitBillPageState extends State<SplitBillPage> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   final _customNameController = TextEditingController();
+  final _customPhoneController = TextEditingController();
 
   final NumberFormat _currencyFormat = NumberFormat('#,###', 'vi_VN');
 
   // Danh sách những người tham gia chia bill (luôn bao gồm bản thân ở vị trí đầu tiên)
   final List<SplitMember> _members = [];
+  List<FriendModel> _friendsList = [];
   bool _isEqualSplit = true;
   bool _isSaving = false;
 
@@ -55,23 +59,21 @@ class _SplitBillPageState extends State<SplitBillPage> {
       ),
     );
 
-    // 2. Mẫu sẵn 2 bạn bè cùng chia bill để trải nghiệm
-    _members.addAll([
-      SplitMember(
-        id: 'friend-1',
-        name: 'Trần Văn B (Bạn cùng phòng)',
-        phoneNumber: '0987654321',
-        isAppUser: true,
-      ),
-      SplitMember(
-        id: 'friend-2',
-        name: 'Lê Thị C (Nhóm đồ án)',
-        phoneNumber: '0911223344',
-        isAppUser: true,
-      ),
-    ]);
-
+    _loadFriends();
     _recalculateSmartSplit();
+  }
+
+  void _loadFriends() {
+    try {
+      final friendRepo = FriendRepository(dioClient: context.read<DioClient>());
+      friendRepo.getFriends().then((friends) {
+        if (mounted) {
+          setState(() {
+            _friendsList = friends;
+          });
+        }
+      }).catchError((_) {});
+    } catch (_) {}
   }
 
   @override
@@ -79,6 +81,7 @@ class _SplitBillPageState extends State<SplitBillPage> {
     _titleController.dispose();
     _amountController.dispose();
     _customNameController.dispose();
+    _customPhoneController.dispose();
     super.dispose();
   }
 
@@ -209,6 +212,8 @@ class _SplitBillPageState extends State<SplitBillPage> {
 
   void _addCustomMember() {
     final name = _customNameController.text.trim();
+    final rawPhone = _customPhoneController.text.trim();
+    final phone = rawPhone.replaceAll(RegExp(r'[\s.-]'), '');
     if (name.isEmpty) return;
 
     setState(() {
@@ -216,10 +221,30 @@ class _SplitBillPageState extends State<SplitBillPage> {
         SplitMember(
           id: 'custom-${DateTime.now().millisecondsSinceEpoch}',
           name: name,
+          phoneNumber: phone.isNotEmpty ? phone : null,
           isAppUser: false,
         ),
       );
       _customNameController.clear();
+      _customPhoneController.clear();
+      if (_isEqualSplit) {
+        _recalculateSmartSplit();
+      }
+    });
+    Navigator.pop(context);
+  }
+
+  void _addFriendMember(FriendModel friend) {
+    if (_members.any((m) => m.id == friend.friendUserId)) return;
+    setState(() {
+      _members.add(
+        SplitMember(
+          id: friend.friendUserId,
+          name: friend.fullName,
+          phoneNumber: friend.phoneNumber,
+          isAppUser: true,
+        ),
+      );
       if (_isEqualSplit) {
         _recalculateSmartSplit();
       }
@@ -228,6 +253,11 @@ class _SplitBillPageState extends State<SplitBillPage> {
   }
 
   void _showAddMemberDialog() {
+    // Lọc những bạn bè chưa được thêm vào bill
+    final unaddedFriends = _friendsList
+        .where((f) => !_members.any((m) => m.id == f.friendUserId || (m.phoneNumber != null && m.phoneNumber == f.phoneNumber)))
+        .toList();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -237,28 +267,67 @@ class _SplitBillPageState extends State<SplitBillPage> {
           'Thêm người chia bill',
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Nhập tên bạn bè hoặc khách ngoài cùng ăn/chi tiêu:',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _customNameController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Ví dụ: Anh Nam Grab, Tuấn bạn mới...',
-                prefixIcon: Icon(Icons.person_add_outlined, color: AppColors.primary),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (unaddedFriends.isNotEmpty) ...[
+                const Text(
+                  'Chọn nhanh từ danh sách bạn bè:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: unaddedFriends.map((friend) {
+                    return ActionChip(
+                      avatar: const Icon(Icons.person_outline, size: 16, color: AppColors.primary),
+                      label: Text(friend.fullName, style: const TextStyle(fontSize: 12)),
+                      backgroundColor: AppColors.primarySoft,
+                      onPressed: () => _addFriendMember(friend),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+              ],
+              const Text(
+                'Hoặc nhập người mới / khách ngoài:',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: _customNameController,
+                autofocus: unaddedFriends.isEmpty,
+                decoration: const InputDecoration(
+                  labelText: 'Tên người cùng chia *',
+                  hintText: 'Ví dụ: Anh Nam, Tuấn...',
+                  prefixIcon: Icon(Icons.person_add_outlined, color: AppColors.primary),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _customPhoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Số điện thoại (tùy chọn)',
+                  hintText: 'Ví dụ: 0912345678',
+                  prefixIcon: Icon(Icons.phone_iphone_outlined, color: AppColors.primary),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              _customNameController.clear();
+              _customPhoneController.clear();
+              Navigator.pop(context);
+            },
             child: const Text('Hủy', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
@@ -412,6 +481,7 @@ class _SplitBillPageState extends State<SplitBillPage> {
         .map((m) => {
               'debtorId': (m.isAppUser && _isValidGuid(m.id)) ? m.id : null,
               'customDebtorName': (m.isAppUser && _isValidGuid(m.id)) ? null : m.name,
+              'debtorPhone': m.phoneNumber,
               'amount': m.amount,
             })
         .toList();

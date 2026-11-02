@@ -27,12 +27,12 @@ public class FriendService : IFriendService
         return digits;
     }
 
-    public async Task<(bool Success, string Message, FriendDto? Data)> AddFriendByPhoneAsync(Guid currentUserId, string phoneNumber)
+    public async Task<(bool Success, string Message, FriendDto? Data)> AddFriendByPhoneAsync(Guid currentUserId, string phoneNumber, string? fullName = null)
     {
         var cleanPhone = NormalizePhone(phoneNumber);
-        if (string.IsNullOrWhiteSpace(cleanPhone))
+        if (string.IsNullOrWhiteSpace(cleanPhone) || cleanPhone.Length < 9)
         {
-            return (false, "Vui lòng nhập số điện thoại hợp lệ.", null);
+            return (false, "Vui lòng nhập số điện thoại hợp lệ (tối thiểu 9-10 chữ số).", null);
         }
 
         var intlPhone = cleanPhone.StartsWith("0") ? "84" + cleanPhone.Substring(1) : cleanPhone;
@@ -44,14 +44,40 @@ public class FriendService : IFriendService
             u.PhoneNumber == intlPhone ||
             u.PhoneNumber == plusIntlPhone);
 
-        if (targetUser == null)
-        {
-            return (false, "Số điện thoại này chưa đăng ký tài khoản BillSplit. Hãy nhờ bạn bè tải app và đăng ký tài khoản trước nhé!", null);
-        }
-
-        if (targetUser.Id == currentUserId)
+        if (targetUser != null && targetUser.Id == currentUserId)
         {
             return (false, "Bạn không thể tự kết bạn với chính mình.", null);
+        }
+
+        if (targetUser == null)
+        {
+            // Tự động tạo hồ sơ liên hệ bạn bè theo số điện thoại
+            var displayName = !string.IsNullOrWhiteSpace(fullName)
+                ? fullName.Trim()
+                : ("Bạn (" + cleanPhone + ")");
+
+            targetUser = new User
+            {
+                Id = Guid.NewGuid(),
+                PhoneNumber = cleanPhone,
+                FullName = displayName,
+                Email = $"{cleanPhone}@billsplit.local",
+                PasswordHash = string.Empty,
+                BankBin = string.Empty,
+                BankAccountNo = string.Empty,
+                BankAccountName = string.Empty,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.Users.Add(targetUser);
+            await _context.SaveChangesAsync();
+        }
+        else if (!string.IsNullOrWhiteSpace(fullName) && string.IsNullOrEmpty(targetUser.PasswordHash))
+        {
+            // Cập nhật tên gợi nhớ nếu người dùng nhập tên rõ hơn cho bạn bè chưa tạo tài khoản thật
+            targetUser.FullName = fullName.Trim();
+            await _context.SaveChangesAsync();
         }
 
         var existingFriendship = await _context.Friendships.FirstOrDefaultAsync(f =>

@@ -29,14 +29,16 @@ public class AuthService : IAuthService
 
     public async Task<(bool Success, string Message, AuthResponseDto? Data)> RegisterAsync(RegisterRequestDto request)
     {
-        // 1. Kiểm tra số điện thoại hoặc email đã tồn tại chưa
-        var phoneExists = await _context.Users.AnyAsync(u => u.PhoneNumber == request.PhoneNumber);
-        if (phoneExists)
+        var targetPhone = request.PhoneNumber.Trim();
+
+        // 1. Kiểm tra số điện thoại: nếu đã có tài khoản thực sự (đã có mật khẩu) thì báo trùng
+        var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == targetPhone);
+        if (existingUser != null && !string.IsNullOrEmpty(existingUser.PasswordHash))
         {
             return (false, "Số điện thoại đã được đăng ký trên hệ thống.", null);
         }
 
-        var emailExists = await _context.Users.AnyAsync(u => u.Email == request.Email.ToLower());
+        var emailExists = await _context.Users.AnyAsync(u => u.Email == request.Email.ToLower() && (existingUser == null || u.Id != existingUser.Id));
         if (emailExists)
         {
             return (false, "Email đã được sử dụng trên hệ thống.", null);
@@ -48,24 +50,39 @@ public class AuthService : IAuthService
         // 3. Chuẩn hóa tên in hoa không dấu của chủ tài khoản
         var normalizedAccountName = request.BankAccountName.Trim().ToUpper();
 
-        var newUser = new User
+        User newUser;
+        if (existingUser != null)
         {
-            PhoneNumber = request.PhoneNumber.Trim(),
-            Email = request.Email.Trim().ToLower(),
-            PasswordHash = passwordHash,
-            FullName = request.FullName.Trim(),
-            BankBin = request.BankBin.Trim(),
-            BankAccountNo = request.BankAccountNo.Trim(),
-            BankAccountName = normalizedAccountName,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        _context.Users.Add(newUser);
+            // Kích hoạt hồ sơ thực tế từ thông tin bạn bè đã thêm trước đó
+            existingUser.Email = request.Email.Trim().ToLower();
+            existingUser.PasswordHash = passwordHash;
+            existingUser.FullName = request.FullName.Trim();
+            existingUser.BankBin = request.BankBin.Trim();
+            existingUser.BankAccountNo = request.BankAccountNo.Trim();
+            existingUser.BankAccountName = normalizedAccountName;
+            existingUser.UpdatedAt = DateTime.UtcNow;
+            newUser = existingUser;
+        }
+        else
+        {
+            newUser = new User
+            {
+                PhoneNumber = targetPhone,
+                Email = request.Email.Trim().ToLower(),
+                PasswordHash = passwordHash,
+                FullName = request.FullName.Trim(),
+                BankBin = request.BankBin.Trim(),
+                BankAccountNo = request.BankAccountNo.Trim(),
+                BankAccountName = normalizedAccountName,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.Users.Add(newUser);
+        }
 
         // 4. Tự động liên kết các khoản nợ quá khứ nếu trước đó bạn bè đã chia nợ theo số điện thoại này
         var unlinkedDebts = await _context.Debts
-            .Where(d => d.DebtorId == null && d.DebtorPhone == request.PhoneNumber.Trim())
+            .Where(d => d.DebtorId == null && d.DebtorPhone == targetPhone)
             .ToListAsync();
 
         foreach (var debt in unlinkedDebts)

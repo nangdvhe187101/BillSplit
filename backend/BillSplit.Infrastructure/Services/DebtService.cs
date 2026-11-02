@@ -66,12 +66,29 @@ public class DebtService : IDebtService
             }
 
             string debtorName = item.CustomDebtorName ?? "Thành viên";
-            if (item.DebtorId.HasValue)
+            var debtorId = item.DebtorId;
+            var debtorPhone = item.DebtorPhone?.Trim();
+
+            if (debtorId.HasValue)
             {
-                var debtorUser = await _context.Users.FindAsync(item.DebtorId.Value);
+                var debtorUser = await _context.Users.FindAsync(debtorId.Value);
                 if (debtorUser != null)
                 {
                     debtorName = debtorUser.FullName;
+                    if (string.IsNullOrWhiteSpace(debtorPhone))
+                    {
+                        debtorPhone = debtorUser.PhoneNumber;
+                    }
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(debtorPhone))
+            {
+                // Nếu chưa có DebtorId nhưng có số điện thoại, kiểm tra xem số này đã có user chưa
+                var userByPhone = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == debtorPhone);
+                if (userByPhone != null)
+                {
+                    debtorId = userByPhone.Id;
+                    debtorName = userByPhone.FullName;
                 }
             }
 
@@ -80,8 +97,9 @@ public class DebtService : IDebtService
                 Id = Guid.NewGuid(),
                 ExpenseId = expense.Id,
                 CreditorId = creditorId,
-                DebtorId = item.DebtorId,
+                DebtorId = debtorId,
                 CustomDebtorName = item.CustomDebtorName,
+                DebtorPhone = debtorPhone,
                 Amount = item.Amount,
                 DebtCode = debtCode,
                 Status = DebtStatus.Pending,

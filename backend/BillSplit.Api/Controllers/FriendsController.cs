@@ -36,7 +36,7 @@ public class FriendsController : ControllerBase
     public async Task<IActionResult> AddFriend([FromBody] AddFriendRequestDto request)
     {
         var userId = GetCurrentUserId();
-        var (success, message, data) = await _friendService.AddFriendByPhoneAsync(userId, request.PhoneNumber);
+        var (success, message, data) = await _friendService.AddFriendByPhoneAsync(userId, request.PhoneNumber, request.FullName);
         if (!success)
         {
             return BadRequest(new { message });
