@@ -11,6 +11,8 @@ class DebtDetailModel {
   final double amount;
   final String debtCode;
   final String status;
+  final DateTime? createdAt;
+  final DateTime? paidAt;
 
   DebtDetailModel({
     required this.id,
@@ -23,6 +25,8 @@ class DebtDetailModel {
     required this.amount,
     required this.debtCode,
     required this.status,
+    this.createdAt,
+    this.paidAt,
   });
 
   factory DebtDetailModel.fromJson(Map<String, dynamic> json) {
@@ -37,6 +41,8 @@ class DebtDetailModel {
       amount: (json['amount'] as num).toDouble(),
       debtCode: json['debtCode'] as String,
       status: json['status'] as String,
+      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
+      paidAt: json['paidAt'] != null ? DateTime.tryParse(json['paidAt'].toString()) : null,
     );
   }
 }

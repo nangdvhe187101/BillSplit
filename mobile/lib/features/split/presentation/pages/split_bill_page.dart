@@ -141,6 +141,9 @@ class _SplitBillPageState extends State<SplitBillPage> {
 
     setState(() {
       _amountController.text = result.totalAmount.toInt().toString();
+      if (result.billTitle != null && result.billTitle!.isNotEmpty && _titleController.text.trim().isEmpty) {
+        _titleController.text = result.billTitle!;
+      }
       _recalculateSmartSplit();
     });
   }
@@ -447,17 +450,112 @@ class _SplitBillPageState extends State<SplitBillPage> {
       ),
     );
 
-    // Chuyển sang trang tạo VietQR cho người nợ đầu tiên, dùng debtId/debtCode THẬT từ Backend
     final firstDebt = result.debts.first;
-    context.push(
-      '/qr-payment',
-      extra: {
-        'debtId': firstDebt.id,
-        'debtorName': firstDebt.debtorName,
-        'amount': firstDebt.amount,
-        'debtCode': firstDebt.debtCode,
-        'title': _titleController.text.trim(),
-      },
+    final debtsCount = result.debts.length;
+
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 36),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Center(
+                child: Text(
+                  'Tạo bill chia nợ thành công!',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: Text(
+                  'Đã ghi nhận $debtsCount khoản nợ. Hệ thống đã tự động cộng dồn công nợ cho từng thành viên.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Nút 1: Quay lại trang chủ và load lại hệ thống để đồng bộ lại dữ liệu
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  context.go('/home', extra: {'refresh': true});
+                },
+                icon: const Icon(Icons.home_rounded, color: Colors.white),
+                label: const Text(
+                  'Quay lại trang chủ & Đồng bộ',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Nút 2: Xem mã VietQR thu tiền của người đầu tiên
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  context.push(
+                    '/qr-payment',
+                    extra: {
+                      'debtId': firstDebt.id,
+                      'debtorName': firstDebt.debtorName,
+                      'amount': firstDebt.amount,
+                      'debtCode': firstDebt.debtCode,
+                      'title': _titleController.text.trim(),
+                    },
+                  );
+                },
+                icon: const Icon(Icons.qr_code_2_rounded, color: AppColors.primary),
+                label: Text(
+                  'Xem VietQR thu tiền (${firstDebt.debtorName})',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 6),
+              // Nút 3: Xem Sổ nợ gộp theo người
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  context.push('/person-debts');
+                },
+                icon: const Icon(Icons.people_alt_outlined, color: AppColors.textSecondary, size: 18),
+                label: const Text(
+                  'Xem Sổ nợ gộp theo người',
+                  style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

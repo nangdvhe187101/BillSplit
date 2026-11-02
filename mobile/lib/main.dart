@@ -11,6 +11,7 @@ import 'features/friends/presentation/pages/friends_page.dart';
 import 'features/groups/presentation/pages/groups_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/payment/presentation/pages/qr_payment_page.dart';
+import 'features/split/presentation/pages/person_debts_summary_page.dart';
 import 'features/split/presentation/pages/split_bill_page.dart';
 
 void main() async {
@@ -90,7 +91,15 @@ GoRouter _createRouter(LocalStorageService localStorage) {
       ),
       GoRoute(
         path: '/home',
-        builder: (context, state) => const HomePage(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final autoRefresh = extra?['refresh'] == true;
+          return HomePage(autoRefresh: autoRefresh);
+        },
+      ),
+      GoRoute(
+        path: '/person-debts',
+        builder: (context, state) => const PersonDebtsSummaryPage(),
       ),
       GoRoute(
         path: '/split',

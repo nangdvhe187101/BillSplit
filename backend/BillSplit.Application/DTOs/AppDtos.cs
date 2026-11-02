@@ -76,6 +76,17 @@ public record DebtDetailDto(
     DateTime CreatedAt
 );
 
+public record PersonDebtSummaryDto(
+    Guid? DebtorId,
+    string DebtorName,
+    string? PhoneNumber,
+    decimal TotalPendingAmount,
+    int PendingCount,
+    decimal TotalPaidAmount,
+    int PaidCount,
+    List<DebtDetailDto> Debts
+);
+
 public record AutoSettleRequestDto(
     string RawBankMessage,
     string? BankShortName

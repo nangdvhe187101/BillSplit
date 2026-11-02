@@ -171,6 +171,56 @@ public class DebtService : IDebtService
         )).ToList();
     }
 
+    public async Task<List<PersonDebtSummaryDto>> GetDebtsGroupedByPersonAsync(Guid userId, bool asCreditor)
+    {
+        var allDebts = await GetDebtsAsync(userId, status: null, asCreditor: asCreditor);
+
+        // Gom nhóm theo từng người (theo DebtorId nếu có tài khoản, hoặc tên nếu là khách ngoài)
+        var groups = allDebts.GroupBy(d => asCreditor
+            ? (d.DebtorId.HasValue ? d.DebtorId.Value.ToString() : $"custom_{d.DebtorName}")
+            : d.CreditorId.ToString()
+        );
+
+        var result = new List<PersonDebtSummaryDto>();
+
+        foreach (var group in groups)
+        {
+            var firstDebt = group.First();
+            var debtorId = asCreditor ? firstDebt.DebtorId : firstDebt.CreditorId;
+            var personName = asCreditor ? firstDebt.DebtorName : firstDebt.CreditorName;
+
+            string? phoneNumber = null;
+            if (debtorId.HasValue)
+            {
+                var user = await _context.Users.FindAsync(debtorId.Value);
+                phoneNumber = user?.PhoneNumber;
+            }
+
+            var debtList = group.OrderByDescending(d => d.CreatedAt).ToList();
+            var pendingDebts = debtList.Where(d => d.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase)).ToList();
+            var paidDebts = debtList.Where(d => d.Status.Equals("Paid", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            var totalPending = pendingDebts.Sum(d => d.Amount);
+            var totalPaid = paidDebts.Sum(d => d.Amount);
+
+            result.Add(new PersonDebtSummaryDto(
+                debtorId,
+                personName,
+                phoneNumber,
+                totalPending,
+                pendingDebts.Count,
+                totalPaid,
+                paidDebts.Count,
+                debtList
+            ));
+        }
+
+        return result
+            .OrderByDescending(p => p.TotalPendingAmount)
+            .ThenByDescending(p => p.PendingCount)
+            .ToList();
+    }
+
     public async Task<(bool Success, string Message, DebtDetailDto? SettledDebt)> AutoSettleByMessageAsync(Guid creditorId, AutoSettleRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(request.RawBankMessage))

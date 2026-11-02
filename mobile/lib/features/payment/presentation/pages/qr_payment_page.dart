@@ -132,7 +132,7 @@ class _QrPaymentPageState extends State<QrPaymentPage> {
     );
 
     if (result.success) {
-      context.go('/home');
+      context.go('/home', extra: {'refresh': true});
     }
   }
 
@@ -144,6 +144,13 @@ class _QrPaymentPageState extends State<QrPaymentPage> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Quét mã VietQR để trả nợ'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.home_rounded, color: AppColors.primary),
+            tooltip: 'Quay lại trang chủ',
+            onPressed: () => context.go('/home', extra: {'refresh': true}),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -334,6 +341,23 @@ class _QrPaymentPageState extends State<QrPaymentPage> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 14),
+
+              // NÚT QUAY LẠI TRANG CHỦ & ĐỒNG BỘ DỮ LIỆU
+              OutlinedButton.icon(
+                onPressed: () => context.go('/home', extra: {'refresh': true}),
+                icon: const Icon(Icons.home_rounded, color: AppColors.primary),
+                label: const Text(
+                  'Quay lại trang chủ & Đồng bộ',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.primary, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  backgroundColor: AppColors.primarySoft.withValues(alpha: 0.25),
+                ),
               ),
               const SizedBox(height: 24),
             ],
