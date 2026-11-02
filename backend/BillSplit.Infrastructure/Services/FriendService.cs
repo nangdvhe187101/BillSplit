@@ -16,12 +16,37 @@ public class FriendService : IFriendService
         _context = context;
     }
 
+    private static string NormalizePhone(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return string.Empty;
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        if (digits.StartsWith("84") && digits.Length >= 10)
+        {
+            digits = "0" + digits.Substring(2);
+        }
+        return digits;
+    }
+
     public async Task<(bool Success, string Message, FriendDto? Data)> AddFriendByPhoneAsync(Guid currentUserId, string phoneNumber)
     {
-        var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+        var cleanPhone = NormalizePhone(phoneNumber);
+        if (string.IsNullOrWhiteSpace(cleanPhone))
+        {
+            return (false, "Vui lòng nhập số điện thoại hợp lệ.", null);
+        }
+
+        var intlPhone = cleanPhone.StartsWith("0") ? "84" + cleanPhone.Substring(1) : cleanPhone;
+        var plusIntlPhone = "+" + intlPhone;
+
+        var targetUser = await _context.Users.FirstOrDefaultAsync(u =>
+            u.PhoneNumber == cleanPhone ||
+            u.PhoneNumber == phoneNumber.Trim() ||
+            u.PhoneNumber == intlPhone ||
+            u.PhoneNumber == plusIntlPhone);
+
         if (targetUser == null)
         {
-            return (false, "Không tìm thấy người dùng có số điện thoại này trong hệ thống.", null);
+            return (false, "Số điện thoại này chưa đăng ký tài khoản BillSplit. Hãy nhờ bạn bè tải app và đăng ký tài khoản trước nhé!", null);
         }
 
         if (targetUser.Id == currentUserId)
@@ -39,7 +64,23 @@ public class FriendService : IFriendService
             {
                 return (false, "Hai người đã là bạn bè từ trước.", null);
             }
-            return (false, "Lời mời kết bạn đang chờ phản hồi.", null);
+            // Kích hoạt ngay mối quan hệ bạn bè nếu trước đó còn đang Pending
+            existingFriendship.Status = FriendshipStatus.Accepted;
+            await _context.SaveChangesAsync();
+
+            var acceptedDto = new FriendDto(
+                existingFriendship.Id,
+                targetUser.Id,
+                targetUser.FullName,
+                targetUser.PhoneNumber,
+                targetUser.AvatarUrl,
+                targetUser.BankBin,
+                targetUser.BankAccountNo,
+                targetUser.BankAccountName,
+                existingFriendship.Status.ToString(),
+                0
+            );
+            return (true, "Đã thêm bạn bè thành công!", acceptedDto);
         }
 
         var friendship = new Friendship
@@ -47,30 +88,28 @@ public class FriendService : IFriendService
             Id = Guid.NewGuid(),
             RequesterId = currentUserId,
             AddresseeId = targetUser.Id,
-            // Chờ người được mời đồng ý, không tự động Accepted, để không lộ thông tin
-            // ngân hàng của họ cho người lạ chỉ vì biết đúng số điện thoại.
-            Status = FriendshipStatus.Pending,
+            // Tự động kết nối bạn bè ngay để có thể chia bill và tính nợ
+            Status = FriendshipStatus.Accepted,
             CreatedAt = DateTime.UtcNow
         };
 
         _context.Friendships.Add(friendship);
         await _context.SaveChangesAsync();
 
-        // Chưa lộ số tài khoản/tên ngân hàng của người được mời khi lời mời còn Pending.
         var dto = new FriendDto(
             friendship.Id,
             targetUser.Id,
             targetUser.FullName,
             targetUser.PhoneNumber,
             targetUser.AvatarUrl,
-            string.Empty,
-            string.Empty,
-            string.Empty,
+            targetUser.BankBin,
+            targetUser.BankAccountNo,
+            targetUser.BankAccountName,
             friendship.Status.ToString(),
             0
         );
 
-        return (true, "Đã gửi lời mời kết bạn, chờ người kia đồng ý.", dto);
+        return (true, "Đã thêm bạn bè thành công!", dto);
     }
 
     public async Task<(bool Success, string Message)> AcceptFriendRequestAsync(Guid currentUserId, Guid friendshipId)

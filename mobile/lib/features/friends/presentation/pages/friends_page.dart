@@ -110,8 +110,17 @@ class _FriendsPageState extends State<FriendsPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final phone = _phoneController.text.trim();
-              if (phone.isEmpty) return;
+              final rawPhone = _phoneController.text.trim();
+              final phone = rawPhone.replaceAll(RegExp(r'[\s.-]'), '');
+              if (phone.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Vui lòng nhập số điện thoại'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+                return;
+              }
 
               final result = await _repository.addFriendByPhone(phone);
               if (!context.mounted) return;
